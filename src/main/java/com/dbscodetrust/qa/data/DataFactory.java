@@ -17,6 +17,8 @@ public final class DataFactory {
 
     private static final TestData.Root ROOT = load();
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyMMddHHmmss");
+    /** Sequencial por JVM: garante unicidade mesmo com muitos e-mails no mesmo segundo/thread. */
+    private static final java.util.concurrent.atomic.AtomicLong SEQ = new java.util.concurrent.atomic.AtomicLong();
 
     private DataFactory() {}
 
@@ -53,16 +55,18 @@ public final class DataFactory {
     }
 
     /**
-     * ex.: qa.guest.261119105853.t26a3f9@gmail.com
+     * ex.: qa.guest.261119105853.t26n1a3f9c2@gmail.com
      * O validador do stg2 rejeita "+" e "-" no e-mail (campo fica inválido e o step não avança),
-     * por isso só letras, números e ponto. Timestamp + thread + 4 hex garantem unicidade em paralelo.
+     * por isso só letras, números e ponto. Timestamp + thread + sequencial (único na JVM)
+     * + 6 hex (unicidade entre máquinas/execuções simultâneas).
      */
     public static String uniqueEmail() {
         String prefix = customer().emailPrefix();
         String ts = LocalDateTime.now().format(TS);
-        String rnd = UUID.randomUUID().toString().replace("-", "").substring(0, 4);
+        String rnd = UUID.randomUUID().toString().replace("-", "").substring(0, 6);
         long thread = Thread.currentThread().threadId();
+        long seq = SEQ.incrementAndGet();
         int at = prefix.indexOf('@');
-        return prefix.substring(0, at) + "." + ts + ".t" + thread + rnd + prefix.substring(at);
+        return prefix.substring(0, at) + "." + ts + ".t" + thread + "n" + seq + rnd + prefix.substring(at);
     }
 }

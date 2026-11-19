@@ -107,7 +107,7 @@ Feito manualmente no stg2 antes da automação:
 
 - **Cartões** (sandbox Mercado Pago PE): Visa `4009 1753 3280 6176`, Mastercard `5031 7557 3453 0604`, Amex `3711 803032 57522` — validade `11/30`, CVV `123` (Amex `1234`), documento `123456789`.
 - **O titular define o resultado**: `APRO` aprovado · `OTHE` erro geral · `FUND` saldo insuficiente · `SECU` CVV inválido · `CONT` pendente.
-- **E‑mail único** por execução/thread: `qa.guest.<yyMMddHHmmss>.t<thread><4hex>@gmail.com` (o site rejeita `+` e `-`).
+- **E‑mail único** por execução/thread: `qa.guest.<yyMMddHHmmss>.t<thread>n<seq><6hex>@gmail.com` (o site rejeita `+` e `-`).
 
 ---
 
