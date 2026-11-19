@@ -1,5 +1,6 @@
 package com.dbscodetrust.qa.pages;
 
+import com.dbscodetrust.qa.config.TestConfig;
 import com.dbscodetrust.qa.data.TestData;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
@@ -30,7 +31,9 @@ public class DeliveryPage extends BasePage {
 
     /** Passo 9: seção de endereço habilitada após os dados pessoais. */
     public DeliveryPage assertAddressSectionEnabled() {
-        assertThat(department).isVisible();
+        // seção carrega por lazy-load; sob execução paralela o stg2 pode levar > 20 s
+        assertThat(department).isVisible(new com.microsoft.playwright.assertions.LocatorAssertions.IsVisibleOptions()
+                .setTimeout(TestConfig.getInt("timeout.navigation")));
         assertThat(department).hasAttribute("aria-disabled", "false");
         assertThat(street).isEditable();
         return this;
@@ -71,17 +74,48 @@ public class DeliveryPage extends BasePage {
         return m.find() ? money(m.group(1)) : BigDecimal.ZERO; // "Gratis"
     }
 
+    /**
+     * Clique REAL na caixa do mat-checkbox (como o usuário). Marcar o <input> nativo com force
+     * deixa o checkbox visualmente marcado, mas o form do Spartacus não registra -> step não avança.
+     */
     public DeliveryPage acceptTerms() {
-        terms.check(new Locator.CheckOptions().setForce(true)); // mdc native control fica sob o ripple
+        if (!terms.isChecked()) {
+            // clica na CAIXA (.mdc-checkbox), não no texto: o label contém links de T&C/Privacidade
+            page.locator("mat-checkbox:has(input[name='termsAndCondition']) .mdc-checkbox").first().click();
+        }
         assertThat(terms).isChecked();
         return this;
     }
 
-    /** Passo 12. */
+    /**
+     * Passo 12. Se o step não avançar, coleta as mensagens de validação visíveis e tenta mais uma vez;
+     * persistindo, falha mostrando os erros (em vez de só "timeout").
+     */
     public PaymentPage continueToPayment() {
-        continueBtn.click();
-        waitForStep("CHECKOUT_STEP_PAYMENT");
-        return new PaymentPage(page);
+        street.blur();
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            continueBtn.scrollIntoViewIfNeeded();
+            continueBtn.click();
+            try {
+                page.waitForURL(java.util.regex.Pattern.compile(".*step=CHECKOUT_STEP_PAYMENT.*"),
+                        new Page.WaitForURLOptions().setTimeout(20_000));
+                return new PaymentPage(page);
+            } catch (com.microsoft.playwright.TimeoutError e) {
+                if (attempt == 2) {
+                    throw new AssertionError("Não avançou para o pagamento. Validações visíveis: " + visibleErrors(), e);
+                }
+            }
+        }
+        throw new IllegalStateException("inalcançável");
+    }
+
+    /** Mensagens de erro/validação visíveis no step (mat-error, alertas, campos inválidos). */
+    public java.util.List<String> visibleErrors() {
+        java.util.List<String> errors = new java.util.ArrayList<>(page.locator(
+                "mat-error >> visible=true, [role='alert'] >> visible=true, cx-global-message >> visible=true").allInnerTexts());
+        page.locator("mat-form-field.mat-form-field-invalid >> visible=true").all()
+                .forEach(f -> errors.add("inválido: " + f.locator("mat-label, label").first().innerText().trim()));
+        return errors;
     }
 
     public void clickContinueExpectingValidation() {

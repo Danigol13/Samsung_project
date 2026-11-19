@@ -39,6 +39,10 @@ public class ContactInfoPage extends BasePage {
     }
 
     public DeliveryPage continueToDelivery() {
+        email.blur();
+        // fail-fast: campo inválido (ex.: e-mail rejeitado) deixa o mat-form-field vermelho e o step não avança
+        assertThat(page.locator("main mat-form-field.mat-form-field-invalid"))
+                .hasCount(0, new com.microsoft.playwright.assertions.LocatorAssertions.HasCountOptions().setTimeout(3_000));
         continueBtn.click();
         waitForStep("CHECKOUT_STEP_DELIVERY");
         return new DeliveryPage(page);

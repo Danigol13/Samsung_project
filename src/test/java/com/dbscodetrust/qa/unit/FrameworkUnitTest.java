@@ -34,7 +34,8 @@ class FrameworkUnitTest {
         Set<String> emails = java.util.Collections.synchronizedSet(new HashSet<>());
         IntStream.range(0, 500).parallel().forEach(i -> emails.add(DataFactory.uniqueEmail()));
         assertThat(emails).hasSize(500)
-                .allMatch(e -> e.matches("qa\\.guest\\+\\d{14}-t\\d+-[0-9a-f]{8}@mailinator\\.com"));
+                .allMatch(e -> e.matches("qa\\.guest\\.\\d{12}\\.t\\d+[0-9a-f]{4}@gmail\\.com"))
+                .allMatch(e -> !e.contains("+") && !e.contains("-"));
     }
 
     @Test
@@ -45,15 +46,29 @@ class FrameworkUnitTest {
     }
 
     @Test
-    void orderNumberRegexMatchesCommonFormats() {
-        Pattern p = Pattern.compile(com.dbscodetrust.qa.config.TestConfig.get("order.number.regex"));
-        for (String txt : new String[]{
-                "¡Gracias por tu compra! Número de pedido: PE210045678",
-                "Tu pedido N° 00012345678 fue realizado",
-                "Order #PE1234567 placed successfully"}) {
-            var m = p.matcher(txt);
-            assertThat(m.find()).as(txt).isTrue();
-            assertThat(m.group(1)).matches("[A-Z]{0,4}\\d{6,}");
-        }
+    void orderNumberRegexMatchesStagingConfirmation() {
+        Pattern p = com.dbscodetrust.qa.config.TestConfig.regex("order.number.regex");
+        // texto real da confirmação (o número vem em elemento separado do rótulo)
+        var m = p.matcher("¡Muchas gracias por tu compra!\n\n\n PE261119-78882481 \n Más Información");
+        assertThat(m.find()).isTrue();
+        assertThat(m.group(1)).isEqualTo("PE261119-78882481");
+        var url = p.matcher("https://stg2.shop.samsung.com/pe/orderConfirmation;orderCode=PE261119-78882479_261119144444218?viewEnd=true");
+        assertThat(url.find()).isTrue();
+        assertThat(url.group(1)).isEqualTo("PE261119-78882479");
+        var failure = com.dbscodetrust.qa.config.TestConfig.regex("order.status.failure.regex");
+        assertThat(failure.matcher("WAITING_FOR_SEND_FINANCIAL").matches()).isFalse();
+        assertThat(failure.matcher("CREATED").matches()).isFalse();
+        assertThat(failure.matcher("CANCELLED").matches()).isTrue();
+    }
+
+    @Test
+    void apiPatternsMatchObservedEndpoints() {
+        var api = "https://s2-smb-api-cdn.ecom-stg.samsung.com/tokocommercewebservices/v2/pe";
+        assertThat(com.dbscodetrust.qa.config.TestConfig.regex("place.order.api.regex")
+                .matcher(api + "/users/current/carts/current/paymentmodes/pe-mercadoCC/submitOrder?lang=es_PE&curr=PEN").matches()).isTrue();
+        assertThat(com.dbscodetrust.qa.config.TestConfig.regex("order.details.api.regex")
+                .matcher(api + "/users/current/orders/PE261119-78882474_261119143035031?fields=FULL&lang=es_PE&curr=PEN").matches()).isTrue();
+        assertThat(com.dbscodetrust.qa.config.TestConfig.regex("confirmation.url.regex")
+                .matcher("https://stg2.shop.samsung.com/pe/orderConfirmation").matches()).isTrue();
     }
 }

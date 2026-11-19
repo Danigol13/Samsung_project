@@ -8,6 +8,7 @@ import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Tracing;
+import com.microsoft.playwright.assertions.PlaywrightAssertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
@@ -29,6 +30,8 @@ public abstract class BaseE2ETest {
 
     @BeforeEach
     void setUpBrowser(TestInfo info) {
+        // staging lento (SSR + lazy load por step): 5s padrão das assertions é pouco
+        PlaywrightAssertions.setDefaultAssertionTimeout(TestConfig.getInt("timeout.assertion"));
         Browser browser = BrowserManager.browser();
         Path evidenceRoot = Paths.get(TestConfig.get("evidence.dir"));
 

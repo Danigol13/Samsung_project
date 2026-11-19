@@ -16,7 +16,7 @@ import java.util.UUID;
 public final class DataFactory {
 
     private static final TestData.Root ROOT = load();
-    private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyMMddHHmmss");
 
     private DataFactory() {}
 
@@ -52,13 +52,17 @@ public final class DataFactory {
         return new TestData.Card(c.brand(), c.number(), c.expiry(), c.cvv(), holder, c.identificationNumber());
     }
 
-    /** ex.: qa.guest+20261119100455-t23-3f9a1c2e@mailinator.com */
+    /**
+     * ex.: qa.guest.261119105853.t26a3f9@gmail.com
+     * O validador do stg2 rejeita "+" e "-" no e-mail (campo fica inválido e o step não avança),
+     * por isso só letras, números e ponto. Timestamp + thread + 4 hex garantem unicidade em paralelo.
+     */
     public static String uniqueEmail() {
         String prefix = customer().emailPrefix();
         String ts = LocalDateTime.now().format(TS);
-        String uuid = UUID.randomUUID().toString().substring(0, 8);
+        String rnd = UUID.randomUUID().toString().replace("-", "").substring(0, 4);
         long thread = Thread.currentThread().threadId();
         int at = prefix.indexOf('@');
-        return prefix.substring(0, at) + "+" + ts + "-t" + thread + "-" + uuid + prefix.substring(at);
+        return prefix.substring(0, at) + "." + ts + ".t" + thread + rnd + prefix.substring(at);
     }
 }

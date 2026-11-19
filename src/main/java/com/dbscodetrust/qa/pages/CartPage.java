@@ -18,7 +18,9 @@ public class CartPage extends BasePage {
     public CartPage open() {
         page.navigate(TestConfig.siteUrl("/cart"),
                 new Page.NavigateOptions().setTimeout(TestConfig.getInt("timeout.navigation")));
-        assertThat(page).hasTitle(Pattern.compile("(?i)shopping basket|carrito"));
+        // o <title> chega vazio e só é preenchido após o bootstrap do Angular: validamos URL + conteúdo
+        assertThat(page).hasURL(Pattern.compile(".*/" + TestConfig.site() + "/cart.*"));
+        assertThat(page.getByText(TestConfig.ci("producto(s)? en tu carrito")).first()).isVisible();
         return this;
     }
 
@@ -26,7 +28,7 @@ public class CartPage extends BasePage {
     public CartPage assertSkuListed(String sku) {
         assertThat(page.locator("main").getByText(sku, new Locator.GetByTextOptions().setExact(true)).first())
                 .isVisible();
-        assertThat(page.locator("main a[href*='/p/" + sku + "']").first()).isVisible();
+        assertThat(page.locator("main a[href*='/p/" + sku + "'] >> visible=true").first()).isVisible();
         return this;
     }
 
@@ -36,7 +38,7 @@ public class CartPage extends BasePage {
 
     /** Passo 4: "Continuar" -> página intermediária de convidado. */
     public GuestLoginPage clickContinue() {
-        continueButton.first().click();
+        continueButton.click();
         page.waitForURL(Pattern.compile(".*/guestlogin/checkout.*"),
                 new Page.WaitForURLOptions().setTimeout(TestConfig.getInt("timeout.navigation")));
         return new GuestLoginPage(page);

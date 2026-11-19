@@ -2,7 +2,7 @@
   "customer": {
     "firstName": "Juan",
     "lastName": "Perez",
-    "emailPrefix": "qa.guest@mailinator.com",
+    "emailPrefix": "qa.guest@gmail.com",
     "phone": "987654321",
     "documentType": "DNI",
     "documentNumber": "45678912"

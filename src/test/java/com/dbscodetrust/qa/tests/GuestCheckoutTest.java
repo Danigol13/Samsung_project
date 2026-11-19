@@ -1,7 +1,7 @@
 package com.dbscodetrust.qa.tests;
 
 import com.dbscodetrust.qa.api.CartApi;
-import com.dbscodetrust.qa.api.PlacedOrder;
+import com.dbscodetrust.qa.api.OrderCapture;
 import com.dbscodetrust.qa.config.TestConfig;
 import com.dbscodetrust.qa.data.DataFactory;
 import com.dbscodetrust.qa.data.TestData;
@@ -55,7 +55,8 @@ class GuestCheckoutTest extends BaseE2ETest {
         var contact = new AtomicReference<ContactInfoPage>();
         var delivery = new AtomicReference<DeliveryPage>();
         var payment = new AtomicReference<PaymentPage>();
-        var placed = new AtomicReference<PlacedOrder>();
+        var placed = new AtomicReference<OrderCapture>();
+        var uiTotal = new AtomicReference<BigDecimal>();
         var confirmation = new ConfirmationPage(page);
 
         // ---- Passos 1-2 (roteiro do cliente): cookie de staging + addToCart via API ----
@@ -99,6 +100,7 @@ class GuestCheckoutTest extends BaseE2ETest {
         evidence.step("12b - Resumo: Total = Subtotal + Envío", () -> {
             BigDecimal subtotal = payment.get().summaryValue("Subtotal");
             BigDecimal total = payment.get().summaryValue("Total");
+            uiTotal.set(total);
             evidence.fact("Subtotal / Envío / Total", subtotal + " / " + shipping + " / " + total);
             assertThat(total).isEqualByComparingTo(subtotal.add(shipping));
         });
@@ -110,17 +112,30 @@ class GuestCheckoutTest extends BaseE2ETest {
                 () -> placed.set(payment.get().placeOrder()));
 
         // ---- Validação final: UI + API ----
-        evidence.step("15 - Confirmação: mensagem de sucesso e Order Number", () -> {
+        int apiTimeout = TestConfig.getInt("timeout.place.order");
+        evidence.step("15 - API: submitOrder (place order) respondeu 200", () -> {
+            var submit = placed.get().awaitSubmit(apiTimeout);
+            evidence.fact("API submitOrder", submit.httpStatus() + " " + submit.url());
+            assertThat(submit.httpStatus()).as("HTTP submitOrder").isEqualTo(200);
+        });
+        var uiOrder = new AtomicReference<String>();
+        evidence.step("16 - Confirmação: mensagem de sucesso e Order Number", () -> {
             confirmation.waitLoaded();
-            String uiOrder = confirmation.orderNumber();
-            evidence.fact("ORDER NUMBER", uiOrder);
-            evidence.fact("Place order API", placed.get().httpStatus() + " " + placed.get().url());
-
-            assertThat(placed.get().httpStatus()).as("HTTP place order").isBetween(200, 299);
-            if (placed.get().code() != null) {
-                assertThat(uiOrder).as("Order Number UI == code retornado pela API").isEqualTo(placed.get().code());
-            }
-            System.out.printf("[ORDER] %s | %s | %s%n", cardKey, email, uiOrder);
+            uiOrder.set(confirmation.orderNumber());
+            evidence.fact("ORDER NUMBER", uiOrder.get());
+            assertThat(confirmation.orderCodeFromUrl()).as("Order Number tela == orderCode da URL").isEqualTo(uiOrder.get());
+        });
+        evidence.step("17 - API: pedido criado no backend (GET orders/{code})", () -> {
+            var order = placed.get().awaitDetails(apiTimeout);
+            evidence.fact("API pedido", order.code() + " | status=" + order.status()
+                    + " | guest=" + order.guestCustomer() + " | total=" + order.total() + " " + order.currency());
+            assertThat(order.httpStatus()).as("HTTP GET orders").isEqualTo(200);
+            assertThat(order.code()).as("Order Number UI == API").isEqualTo(uiOrder.get());
+            assertThat(order.status()).as("status do pedido").isNotBlank()
+                    .doesNotMatch(TestConfig.regex("order.status.failure.regex"));
+            assertThat(order.guestCustomer()).as("pedido de convidado").isTrue();
+            assertThat(order.total()).as("total API == total UI").isEqualByComparingTo(uiTotal.get());
+            System.out.printf("[ORDER] %s | %s | %s | %s%n", cardKey, email, uiOrder.get(), order.status());
         });
     }
 }

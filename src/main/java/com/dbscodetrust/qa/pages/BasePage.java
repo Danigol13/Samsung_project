@@ -26,8 +26,12 @@ public abstract class BasePage {
         this.page = page;
     }
 
+    /**
+     * Elemento VISÍVEL com o data-an-la informado. O site renderiza CTAs duplicados
+     * (ex.: botão fixo do mobile oculto no desktop), então sempre filtramos pelos visíveis.
+     */
     protected Locator byAnalytics(String label) {
-        return page.locator("[data-an-la=\"" + label + "\"]");
+        return page.locator("[data-an-la=\"" + label + "\"] >> visible=true").first();
     }
 
     protected void waitForStep(String step) {
