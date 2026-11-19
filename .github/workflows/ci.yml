@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      groups:
+        description: "JUnit tag (unit | smoke | e2e | negative)"
+        default: "smoke"
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", cache: maven }
+      - name: Compile + unit tests (offline, sem staging)
+        run: mvn -B test -Dgroups=unit
+
+  e2e:
+    if: github.event_name == 'workflow_dispatch'
+    needs: unit
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright/java:v1.49.0-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      - name: E2E
+        run: mvn -B test -Dgroups=${{ github.event.inputs.groups }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence
+          path: target/evidence/

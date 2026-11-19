@@ -1,0 +1,126 @@
+package com.dbscodetrust.qa.tests;
+
+import com.dbscodetrust.qa.api.CartApi;
+import com.dbscodetrust.qa.api.PlacedOrder;
+import com.dbscodetrust.qa.config.TestConfig;
+import com.dbscodetrust.qa.data.DataFactory;
+import com.dbscodetrust.qa.data.TestData;
+import com.dbscodetrust.qa.data.TestData.DeliveryMode;
+import com.dbscodetrust.qa.pages.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.math.BigDecimal;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Feature: Guest checkout - Samsung Shop PE (stg2)
+ *
+ *  Given I have SKU "X" on the Cart page
+ *  When I click "Continue"                              Then I can advance to the Checkout
+ *  Given I entered the e-mail on the intermediate page as a guest
+ *  Then I reach the Checkout where I fill in personal information
+ *  Given after filling personal information the Address section becomes enabled
+ *  Then I can select the Delivery Mode
+ *  And I am able to complete the payment with the test cards
+ *  Then the Confirmation Page displays the Order Number, which I capture
+ */
+@Tag("e2e")
+class GuestCheckoutTest extends BaseE2ETest {
+
+    @Tag("smoke")
+    @ParameterizedTest(name = "Guest checkout aprovado - cartão {0}")
+    @ValueSource(strings = {"visa", "mastercard", "amex"})
+    @DisplayName("Guest compra SKU com cartão de teste Mercado Pago (APRO) e captura o Order Number")
+    void guestCheckoutApproved(String cardKey) {
+        String sku = TestConfig.sku();
+        String email = DataFactory.uniqueEmail();
+        TestData.Customer customer = DataFactory.customer();
+        TestData.Address address = DataFactory.address("lima-miraflores");
+        TestData.Card card = DataFactory.card(cardKey);
+        DeliveryMode mode = DeliveryMode.NORMAL;
+
+        evidence.fact("SKU", sku);
+        evidence.fact("E-mail (único)", email);
+        evidence.fact("Cartão", card.brand() + " **** " + card.number().substring(card.number().length() - 4)
+                + " / titular " + card.cardholderName());
+
+        CartApi cartApi = new CartApi(context);
+        var cart = new CartPage(page);
+        var guest = new AtomicReference<GuestLoginPage>();
+        var contact = new AtomicReference<ContactInfoPage>();
+        var delivery = new AtomicReference<DeliveryPage>();
+        var payment = new AtomicReference<PaymentPage>();
+        var placed = new AtomicReference<PlacedOrder>();
+        var confirmation = new ConfirmationPage(page);
+
+        // ---- Passos 1-2 (roteiro do cliente): cookie de staging + addToCart via API ----
+        evidence.step("01 - Get Cookies Page (API)", () -> {
+            cartApi.getStagingCookie();
+            page.navigate(TestConfig.baseUrl() + "/getcookie.html"); // evidência visual do passo
+        });
+        evidence.step("02 - Add SKU to cart (API addToCart)", () -> {
+            var r = cartApi.addToCart(sku, TestConfig.getInt("quantity"));
+            evidence.fact("addToCart", r.resultCode() + " " + r.resultMessage() + " | cartCount=" + r.cartCount());
+        });
+
+        // ---- Passo 3: carrinho ----
+        evidence.step("03 - Abrir Cart e validar SKU listado", () ->
+                cart.open().assertSkuListed(sku));
+
+        // ---- Passos 4-5: Continue -> página intermediária ----
+        evidence.step("04 - Clicar Continuar", () -> guest.set(cart.clickContinue()));
+        evidence.step("05 - Página intermediária de convidado", () -> guest.get().assertLoaded());
+
+        // ---- Passos 6-8: e-mail + dados pessoais ----
+        evidence.step("06 - Informar e-mail e seguir como convidado",
+                () -> contact.set(guest.get().continueAsGuest(email)));
+        evidence.step("07 - Checkout: Datos de cliente exibido", () -> contact.get().assertLoaded(email));
+        evidence.step("08 - Preencher dados pessoais", () -> contact.get().fill(customer));
+
+        // ---- Passos 9-11: endereço + delivery mode ----
+        evidence.step("09 - Seção de endereço habilitada",
+                () -> delivery.set(contact.get().continueToDelivery().assertAddressSectionEnabled()));
+        evidence.step("10 - Preencher endereço (Departamento/Provincia/Distrito/Dirección)",
+                () -> delivery.get().fillAddress(address));
+        evidence.step("11 - Escolher Delivery Mode: " + mode.label(), () -> {
+            assertThat(delivery.get().deliveryModesCount()).as("delivery modes disponíveis").isPositive();
+            delivery.get().chooseDeliveryMode(mode);
+        });
+        BigDecimal shipping = delivery.get().deliveryModePrice(mode);
+
+        // ---- Passo 12: ir para pagamento ----
+        evidence.step("12 - Aceitar T&C e seguir para pagamento",
+                () -> payment.set(delivery.get().acceptTerms().continueToPayment()));
+        evidence.step("12b - Resumo: Total = Subtotal + Envío", () -> {
+            BigDecimal subtotal = payment.get().summaryValue("Subtotal");
+            BigDecimal total = payment.get().summaryValue("Total");
+            evidence.fact("Subtotal / Envío / Total", subtotal + " / " + shipping + " / " + total);
+            assertThat(total).isEqualByComparingTo(subtotal.add(shipping));
+        });
+
+        // ---- Passos 13-14: cartão + place order ----
+        evidence.step("13 - Preencher cartão de teste (Mercado Pago Secure Fields)",
+                () -> payment.get().selectCreditCard().fillCard(card));
+        evidence.step("14 - Realizar pedido (captura API de place order)",
+                () -> placed.set(payment.get().placeOrder()));
+
+        // ---- Validação final: UI + API ----
+        evidence.step("15 - Confirmação: mensagem de sucesso e Order Number", () -> {
+            confirmation.waitLoaded();
+            String uiOrder = confirmation.orderNumber();
+            evidence.fact("ORDER NUMBER", uiOrder);
+            evidence.fact("Place order API", placed.get().httpStatus() + " " + placed.get().url());
+
+            assertThat(placed.get().httpStatus()).as("HTTP place order").isBetween(200, 299);
+            if (placed.get().code() != null) {
+                assertThat(uiOrder).as("Order Number UI == code retornado pela API").isEqualTo(placed.get().code());
+            }
+            System.out.printf("[ORDER] %s | %s | %s%n", cardKey, email, uiOrder);
+        });
+    }
+}

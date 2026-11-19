@@ -1,0 +1,49 @@
+{
+  "customer": {
+    "firstName": "Juan",
+    "lastName": "Perez",
+    "emailPrefix": "qa.guest@mailinator.com",
+    "phone": "987654321",
+    "documentType": "DNI",
+    "documentNumber": "45678912"
+  },
+
+  "addresses": {
+    "lima-miraflores": {
+      "department": "LIMA",
+      "province": "LIMA",
+      "district": "MIRAFLORES",
+      "street": "Av. Jose Larco",
+      "number": "1150",
+      "apartment": "",
+      "reference": "Frente al parque"
+    },
+    "out-of-coverage": {
+      "_comment": "Validar com o time qual distrito NÃO tem cobertura no stg2 e ajustar aqui.",
+      "department": "LORETO",
+      "province": "DATEM DEL MARAÑON",
+      "district": "MORONA",
+      "street": "Calle Principal",
+      "number": "1",
+      "apartment": "",
+      "reference": ""
+    }
+  },
+
+  "cards": {
+    "visa":       { "brand": "Visa",       "number": "4009175332806176", "expiry": "11/30", "cvv": "123",  "cardholderName": "APRO", "identificationNumber": "123456789" },
+    "mastercard": { "brand": "Mastercard", "number": "5031755734530604", "expiry": "11/30", "cvv": "123",  "cardholderName": "APRO", "identificationNumber": "123456789" },
+    "amex":       { "brand": "Amex",       "number": "371180303257522",  "expiry": "11/30", "cvv": "1234", "cardholderName": "APRO", "identificationNumber": "123456789" }
+  },
+
+  "paymentStatusByHolder": {
+    "APRO": "approved",
+    "OTHE": "rejected - general error",
+    "CONT": "pending",
+    "CALL": "rejected - call for authorize",
+    "FUND": "rejected - insufficient amount",
+    "SECU": "rejected - invalid security code",
+    "EXPI": "rejected - expiration date",
+    "FORM": "rejected - form error"
+  }
+}

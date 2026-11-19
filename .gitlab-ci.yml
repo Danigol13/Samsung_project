@@ -1,0 +1,40 @@
+image: mcr.microsoft.com/playwright/java:v1.49.0-noble
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2"
+
+cache:
+  key: maven
+  paths: [.m2/]
+
+stages: [unit, e2e]
+
+unit:
+  stage: unit
+  script:
+    - mvn -B test -Dgroups=unit
+  artifacts:
+    when: always
+    reports:
+      junit: target/surefire-reports/TEST-*.xml
+
+e2e-smoke:
+  stage: e2e
+  script:
+    - mvn -B test -Dgroups=smoke
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths: [target/evidence/]
+    reports:
+      junit: target/surefire-reports/TEST-*.xml
+
+e2e-negative:
+  stage: e2e
+  when: manual
+  allow_failure: true
+  script:
+    - mvn -B test -Dgroups=negative
+  artifacts:
+    when: always
+    paths: [target/evidence/]

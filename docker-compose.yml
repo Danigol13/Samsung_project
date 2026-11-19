@@ -1,0 +1,14 @@
+services:
+  e2e:
+    build: .
+    container_name: samsung-e2e
+    environment:
+      BASE_URL: ${BASE_URL:-https://stg2.shop.samsung.com}
+      SKU: ${SKU:-RB45DG6300B1PE}
+      HEADLESS: "true"
+    # evidências (screenshots, report.html, trace.zip) ficam na máquina host
+    volumes:
+      - ./target/evidence:/app/target/evidence
+      - ./target/surefire-reports:/app/target/surefire-reports
+    command: ["-Dgroups=${GROUPS_TAG:-smoke}"]
+    ipc: host   # recomendado pela Microsoft para Chromium em container
