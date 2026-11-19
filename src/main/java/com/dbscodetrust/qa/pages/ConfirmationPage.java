@@ -13,9 +13,28 @@ public class ConfirmationPage extends BasePage {
 
     public ConfirmationPage(Page page) { super(page); }
 
+    /**
+     * Espera a confirmação OU o retorno de erro de pagamento. Observado no stg2: o submitOrder pode
+     * responder HTTP 200 e mesmo assim redirecionar para ...step=CHECKOUT_STEP_PAYMENT&paymenterror=601
+     * (falha de pagamento mesmo com cartão de teste aprovado/APRO) - falhamos na hora com mensagem clara.
+     */
     public ConfirmationPage waitLoaded() {
-        page.waitForURL(TestConfig.regex("confirmation.url.regex"),
-                new Page.WaitForURLOptions().setTimeout(TestConfig.getInt("timeout.place.order")));
+        Pattern ok = TestConfig.regex("confirmation.url.regex");
+        Pattern paymentError = Pattern.compile(".*[?&]paymenterror=([^&]+).*");
+        long deadline = System.currentTimeMillis() + TestConfig.getInt("timeout.place.order");
+        while (!ok.matcher(page.url()).matches()) {
+            Matcher err = paymentError.matcher(page.url());
+            if (err.matches()) {
+                throw new AssertionError("Pagamento NÃO concluído: o checkout retornou paymenterror=" + err.group(1)
+                        + " (submitOrder HTTP 200, mas sem pedido). Com cartão de teste APRO isso indica "
+                        + "instabilidade do sandbox Mercado Pago/stg2. URL: " + page.url());
+            }
+            if (System.currentTimeMillis() > deadline) {
+                throw new AssertionError("Confirmação não carregou em " + TestConfig.getInt("timeout.place.order")
+                        + " ms. URL atual: " + page.url());
+            }
+            page.waitForTimeout(500);
+        }
         assertThat(page.locator("main")).containsText(TestConfig.regex("confirmation.success.regex"));
         return this;
     }

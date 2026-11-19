@@ -40,6 +40,7 @@ public class ContactInfoPage extends BasePage {
 
     public DeliveryPage continueToDelivery() {
         email.blur();
+        page.waitForTimeout(1_000); // validação do e-mail é assíncrona
         // fail-fast: campo inválido (ex.: e-mail rejeitado) deixa o mat-form-field vermelho e o step não avança
         assertThat(page.locator("main mat-form-field.mat-form-field-invalid"))
                 .hasCount(0, new com.microsoft.playwright.assertions.LocatorAssertions.HasCountOptions().setTimeout(3_000));

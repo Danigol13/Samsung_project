@@ -51,7 +51,7 @@ public abstract class BaseE2ETest {
         page = context.newPage();
 
         String name = info.getTestClass().map(Class::getSimpleName).orElse("Test") + "."
-                + info.getDisplayName();
+                + info.getDisplayName() + " [" + TestConfig.get("browser") + "]";
         evidence = new Evidence(evidenceRoot, name, page);
     }
 

@@ -82,25 +82,28 @@ class NegativeCheckoutTest extends BaseE2ETest {
         });
     }
 
+    /**
+     * "ZIP outside the delivery area": o Peru não usa ZIP; a área é Departamento/Provincia/Distrito.
+     * Recon stg2: não há distrito totalmente sem cobertura, mas a área de entrega expressa/agendada
+     * é restrita a Lima/Callao. Fora dela o site deve oferecer SOMENTE o envío regular de provincias.
+     */
     @Test
-    @DisplayName("Endereço fora da área de entrega não oferece Delivery Mode")
+    @DisplayName("Endereço fora da área de entrega Lima/Callao não oferece entrega expressa nem agendada")
     void outOfCoverageAddress() {
         DeliveryPage delivery = reachDelivery();
-        evidence.step("Selecionar distrito sem cobertura", () ->
-                delivery.fillAddress(DataFactory.address("out-of-coverage")));
-        page.waitForTimeout(3_000); // modos chegam via XHR após o distrito
-        // Pré-condição de massa: o distrito configurado precisa realmente estar sem cobertura no stg2.
-        // Se o ambiente oferecer entrega, o cenário é IGNORADO (não falha) com instrução de ajuste.
-        org.junit.jupiter.api.Assumptions.assumeTrue(delivery.deliveryModesCount() == 0
-                        || page.getByText(TestConfig.ci("(no (hay|tenemos) cobertura|no realizamos env[ií]os|fuera de (la )?zona)")).count() > 0,
-                "Distrito 'out-of-coverage' da massa TEM entrega no stg2 -> ajuste testdata/checkout-data.json com um distrito sem cobertura");
-        evidence.step("Validar ausência de Delivery Mode (ou mensagem de cobertura)", () -> {
-            boolean noModes = delivery.deliveryModesCount() == 0;
-            boolean coverageMsg = page.getByText(
-                    TestConfig.ci("(no (hay|tenemos) cobertura|no realizamos env[ií]os|fuera de (la )?zona)"))
-                    .count() > 0;
-            assertThat(noModes || coverageMsg)
-                    .as("esperado: nenhum delivery mode OU mensagem de cobertura").isTrue();
+        TestData.Address addr = DataFactory.address("out-of-coverage");
+        evidence.fact("Endereço", addr.department() + " / " + addr.province() + " / " + addr.district());
+        evidence.step("Selecionar endereço fora de Lima/Callao", () -> delivery.fillAddress(addr));
+        evidence.step("Validar modos de entrega: sem NEXTDAY/SCHEDULE, apenas envío regular provincias", () -> {
+            var ids = delivery.deliveryModeIds();
+            evidence.fact("Delivery modes oferecidos", String.join(", ", ids));
+            assertThat(ids).as("fora de Lima/Callao não deve haver entrega expressa nem agendada")
+                    .noneMatch(id -> id.contains("-NEXTDAY-") || id.contains("-SCHEDULE-"));
+            // se o distrito não tiver cobertura nenhuma, também é comportamento válido de "fora da área"
+            if (!ids.isEmpty()) {
+                assertThat(ids).as("apenas o envío regular").allMatch(id -> id.contains("-NORMAL"));
+                PlaywrightAssertions.assertThat(page.locator("main")).containsText(TestConfig.ci("env[ií]os a provincias"));
+            }
         });
     }
 }

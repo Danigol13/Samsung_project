@@ -45,9 +45,10 @@ Mapeamento passo a passo → `GuestCheckoutTest` (cada `evidence.step` = 1 scree
 
 | # | Passo do roteiro | Implementação |
 |---|---|---|
-| 1 | Get Cookies Page | `CartApi.getStagingCookie()` |
-| 2 | Add SKU ao carrinho | `CartApi.addToCart()` → valida JSONP `resultCode=0000`, `cartCount` |
-| 3 | Cart com SKU listado | `CartPage.assertSkuListed()` |
+| 0 | Get Cookies Page (acesso ao stg2) | `CartApi.getStagingCookie()` |
+| 1 | Abrir a página do produto do SKU | `ProductPage.open()` → `/pe/p/RB45DG6300B1PE` |
+| 2 | Clicar "Add to Cart" | `ProductPage.addToCart()` → modal "Producto agregado" → "Finalizar Compra" |
+| 3 | Cart com SKU listado | `CartPage.assertLoaded().assertSkuListed()` |
 | 4‑5 | Continue → página intermediária | `CartPage.clickContinue()` → `/pe/guestlogin/checkout` |
 | 6 | E‑mail de convidado | `GuestLoginPage.continueAsGuest()` (e‑mail único) |
 | 7‑8 | Dados pessoais | `ContactInfoPage.fill()` (nome, celular, DNI) |
@@ -68,6 +69,7 @@ Feito manualmente no stg2 antes da automação:
 
 | Tela | URL / step | Locators usados |
 |---|---|---|
+| Produto (PDP) | `/pe/p/{SKU}` | `button[data-an-la="add to cart"][data-modelcode="{SKU}"]`, modal `.add-to-cart-container`, `[data-an-la="recommended product confirmation pop up:ok"]` |
 | Carrinho | `/pe/cart` | `[data-an-la="proceed to checkout"]`, `a[href*='/p/{SKU}']` |
 | Guest | `/pe/guestlogin/checkout` | `input[formcontrolname=guestEmail]`, `[data-an-la=guest]` |
 | Datos de cliente | `?step=CHECKOUT_STEP_CONTACT_INFO` | `input[name=firstName\|lastName\|email\|phone\|vatNumber]`, mat-select "Tipo de documento" |
@@ -93,7 +95,7 @@ Feito manualmente no stg2 antes da automação:
 - Endereço de entrega e de faturação usam os mesmos `name` → sempre `.first()` (entrega).
 - Cartão: número/validade/CVV são **iframes cross‑origin do Mercado Pago**. O dropdown de parcelas só popula quando o MP reconhece o BIN — usado como *sync point* antes do "Realizar pedido".
 - Validação mapeada: `Por favor, ingrese dirección.`
-- O validador de e‑mail **rejeita `+` e `-`** → e‑mails únicos usam só letras, números e ponto.
+- O validador de e‑mail **rejeita `+`, `-` e e‑mails longos (~40+ caracteres)** → e‑mails únicos curtos, só letras, números e ponto.
 - Botões aparecem **duplicados** (CTA fixo do mobile oculto no desktop) → locators filtram `visible=true`.
 - O checkbox de T&C precisa de **clique real na caixa**; marcar o `<input>` nativo não é registrado pelo form.
 - O `<title>` do carrinho chega vazio até o bootstrap do Angular → validação por URL + conteúdo.
@@ -107,7 +109,7 @@ Feito manualmente no stg2 antes da automação:
 
 - **Cartões** (sandbox Mercado Pago PE): Visa `4009 1753 3280 6176`, Mastercard `5031 7557 3453 0604`, Amex `3711 803032 57522` — validade `11/30`, CVV `123` (Amex `1234`), documento `123456789`.
 - **O titular define o resultado**: `APRO` aprovado · `OTHE` erro geral · `FUND` saldo insuficiente · `SECU` CVV inválido · `CONT` pendente.
-- **E‑mail único** por execução/thread: `qa.guest.<yyMMddHHmmss>.t<thread>n<seq><6hex>@gmail.com` (o site rejeita `+` e `-`).
+- **E‑mail único** por execução/thread: `qa.<yyMMddHHmmss>.<seq><4hex>@gmail.com` (o validador do stg2 rejeita `+`, `-` e e‑mails longos) (o site rejeita `+` e `-`).
 
 ---
 
@@ -121,13 +123,16 @@ GROUPS_TAG=negative docker compose up --build # cenários negativos
 
 ### Local
 ```bash
-# 1x: instalar browser
-mvn exec:java -Dexec.args="install --with-deps chromium"
+# 1x: instalar browsers
+mvn exec:java -Dexec.args="install chromium"
 
 mvn test -Dgroups=unit       # testes do framework (offline)
 mvn test -Dgroups=smoke      # happy path
 mvn test -Dgroups=negative   # negativos
 mvn test -Dgroups=e2e        # tudo
+
+# browser padrão: Chromium (headless). Firefox/WebKit são suportados via -Dbrowser, se necessário:
+# mvn test -Dgroups=smoke -Dbrowser=firefox
 
 # overrides (System property ou env var)
 mvn test -Dgroups=smoke -Dheadless=false -Dslow.mo=300 -Dsku=OUTRO_SKU
@@ -135,6 +140,10 @@ mvn test -Djunit.jupiter.execution.parallel.config.fixed.parallelism=1   # padr�
 ```
 
 ### Evidências
+
+**Evidências versionadas da execução no stg2:** [`docs/evidence/index.html`](docs/evidence/index.html) — último run de cada cenário (relatório + screenshot de cada tela). Para atualizar após um run: `./scripts/collect-evidence.sh`.
+
+Estrutura gerada a cada execução:
 ```
 target/evidence/<timestamp>_<Classe.teste>/
 ├── report.html        ← abre no browser: passos, URL, duração, screenshots, ORDER NUMBER
@@ -175,20 +184,20 @@ src/test/java/com/dbscodetrust/qa
 
 ## Status da execução (stg2 · 19/11/2026)
 
-Execução local: `mvn clean test -Dgroups=e2e` (Chromium headed, 2 threads).
+Execução local final: `mvn clean test -Dgroups=e2e` (Chromium, 2 threads). Evidências desse run em [`docs/evidence/index.html`](docs/evidence/index.html).
 
-| Cenário | Último run | Observação |
+| Cenário | Run final | Observação |
 |---|---|---|
-| Guest checkout — **Visa** (APRO) | ✅ | `PE261119-78882520` · status `WAITING_FOR_SEND_FINANCIAL` · UI == API (passou nos 3 últimos runs) |
-| Guest checkout — **Mastercard** (APRO) | ✅ | `PE261119-78882518` · status `CREATED` · UI == API (passou nos 3 últimos runs) |
-| Guest checkout — **Amex** (APRO) | ✅ | `PE261119-78882514` · status `CREATED` · UI == API (estabilizado com a recuperação dos Secure Fields do MP) |
-| Cartão recusado — **FUND** | ✅ | Pedido não criado + mensagem de erro exibida |
-| Cartão recusado — **OTHE** | ✅ | Pedido não criado + mensagem de erro exibida |
-| Cartão recusado — **SECU** | ⚠️ possível defeito | Pedido não criado ✅, mas **sem feedback ao usuário** (botão em loading) — ver item 1 |
-| Dirección vazia | ⚠️ intermitente | Passou em 5 de 6 runs; no último, timeout de 60 s do stg2 antes de chegar ao step de endereço (item 2) |
-| Distrito fora da cobertura | ⏭️ skipped | Massa sem distrito realmente sem cobertura no stg2 (item 4) |
+| Guest checkout — **Visa** (APRO) | ✅ | `PE261119-78895431` · `CREATED` · UI == API · Add to Cart pela PDP |
+| Guest checkout — **Amex** (APRO) | ✅ | `PE261119-78895389` · `CREATED` · UI == API · Add to Cart pela PDP |
+| Guest checkout — **Mastercard** (APRO) | ⚠️ ambiente | `submitOrder` HTTP 200, porém redirecionado para `paymenterror=601` (item 6). Passou nos runs anteriores: `PE261119-78882492`, `-78882504`, `-78882518` |
+| Endereço fora da área de entrega (Lima/Callao) | ✅ | Arequipa: somente "Envío regular" para provincias; sem entrega expressa/agendada |
+| Dirección vazia | ✅ | Mensagem `Por favor, ingrese dirección.` |
+| Cartão recusado — **FUND** | ✅ | Pedido não criado + mensagem de erro |
+| Cartão recusado — **OTHE** | ✅ | Pedido não criado + mensagem de erro |
+| Cartão recusado — **SECU** | ⚠️ possível defeito | Pedido não criado ✅, mas **sem feedback ao usuário** (item 1) |
 
-Pedidos de teste criados nas execuções: `PE261119-78882474`, `-78882479`, `-78882481`, `-78882492`, `-78882493`, `-78882504`, `-78882506`, `-78882514`, `-78882518`, `-78882520`.
+Pedidos de teste criados ao longo das execuções: `PE261119-78882474`, `-78882479`, `-78882481`, `-78882492`, `-78882493`, `-78882504`, `-78882506`, `-78882514`, `-78882518`, `-78882520`, `-78895389`, `-78895431`.
 
 ### Limitações conhecidas / achados
 
@@ -197,8 +206,9 @@ Pedidos de teste criados nas execuções: `PE261119-78882474`, `-78882479`, `-78
    O teste **não mascara** isso: falha com `POSSÍVEL DEFEITO: pagamento recusado sem feedback ao usuário` e anexa screenshot + `trace.zip`. Recomenda‑se abrir bug para o time do checkout/integração MP.
 2. **Instabilidade/lentidão do stg2.** Steps do checkout carregam por lazy‑load e chegam a levar 20–60 s sob execução paralela. Timeouts foram ajustados (`config.properties`) e o paralelismo padrão é 2 (`junit-platform.properties`).
 3. **Mercado Pago sandbox / SDK.** Em parte das execuções o SDK do MP injeta os iframes dos Secure Fields mas não os monta (ficam invisíveis), impedindo o preenchimento do cartão. Mitigação implementada: o teste recarrega o step de pagamento e reabre o painel (até 2x), como faria um usuário; persistindo, falha com mensagem explícita de instabilidade do MP. Também ocasionalmente a tokenização não dispara o `submitOrder` — nesse caso o teste informa se o `POST /v1/card_tokens` ocorreu e com qual status.
-4. **Cobertura de entrega.** Não foi identificado distrito sem cobertura no stg2 (o testado tem entrega). O cenário é ignorado com instrução de ajuste até a massa ser definida com o time.
+4. **Área de entrega ("ZIP fora da área").** O Peru não usa ZIP. Foram varridos 11 departamentos no stg2 e **todos têm cobertura**; a restrição real de área é de modalidade: entrega expressa ("Recíbelo mañana") e agendada só existem em Lima/Callao. O cenário negativo valida essa regra (endereço em Arequipa → apenas "Envío regular" para provincias).
 5. **Pedidos reais no staging.** Cada execução do fluxo aprovado cria pedidos de teste no stg2 (cartões sandbox).
+6. **`paymenterror=601` com cartão aprovado (intermitente).** Em um run o Mastercard APRO teve `submitOrder` HTTP 200 seguido de redirect para `?paymenterror=601`, sem criação de pedido; nos demais runs o mesmo cartão gerou pedido normalmente. O teste identifica o retorno e falha com mensagem explícita (instabilidade do sandbox MP/stg2).
 
 ## Roadmap
 - Persistir execuções (Order Number, duração, status) em **PostgreSQL** e expor um painel (Spring Boot + Angular) — arquitetura sugerida no desafio.

@@ -34,8 +34,9 @@ class FrameworkUnitTest {
         Set<String> emails = java.util.Collections.synchronizedSet(new HashSet<>());
         IntStream.range(0, 500).parallel().forEach(i -> emails.add(DataFactory.uniqueEmail()));
         assertThat(emails).hasSize(500)
-                .allMatch(e -> e.matches("qa\\.guest\\.\\d{12}\\.t\\d+n\\d+[0-9a-f]{6}@gmail\\.com"))
-                .allMatch(e -> !e.contains("+") && !e.contains("-"));
+                .allMatch(e -> e.matches("qa\\.\\d{12}\\.\\d+[0-9a-f]{4}@gmail\\.com"))
+                .allMatch(e -> !e.contains("+") && !e.contains("-"))
+                .allMatch(e -> e.length() <= 38);
     }
 
     @Test

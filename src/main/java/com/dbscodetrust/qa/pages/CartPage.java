@@ -18,6 +18,11 @@ public class CartPage extends BasePage {
     public CartPage open() {
         page.navigate(TestConfig.siteUrl("/cart"),
                 new Page.NavigateOptions().setTimeout(TestConfig.getInt("timeout.navigation")));
+        return assertLoaded();
+    }
+
+    /** Carrinho carregado (usado também quando chegamos via "Finalizar Compra" da PDP). */
+    public CartPage assertLoaded() {
         // o <title> chega vazio e só é preenchido após o bootstrap do Angular: validamos URL + conteúdo
         assertThat(page).hasURL(Pattern.compile(".*/" + TestConfig.site() + "/cart.*"));
         assertThat(page.getByText(TestConfig.ci("producto(s)? en tu carrito")).first()).isVisible();

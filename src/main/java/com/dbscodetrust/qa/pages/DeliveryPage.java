@@ -56,13 +56,32 @@ public class DeliveryPage extends BasePage {
     public DeliveryPage chooseDeliveryMode(TestData.DeliveryMode mode) {
         Locator radio = deliveryOptions.and(page.locator("[id*='-" + mode.name() + "-']")).first();
         assertThat(radio).isAttached();
-        page.getByText(mode.label(), new Page.GetByTextOptions().setExact(true)).first().click();
+        // clique no card do modo; se o Angular não registrar (oscilação observada), tenta de novo
+        for (int attempt = 1; attempt <= 3 && !radio.isChecked(); attempt++) {
+            page.getByText(mode.label(), new Page.GetByTextOptions().setExact(true)).first().click();
+            page.waitForTimeout(1_000);
+        }
         assertThat(radio).isChecked();
         return this;
     }
 
     public int deliveryModesCount() {
         return deliveryOptions.count();
+    }
+
+    /** IDs dos modos oferecidos, ex.: group0pe-NORMAL-50to100KG, group0pe-NORMAL2-50to100KG (provincias). */
+    public java.util.List<String> deliveryModeIds() {
+        try {
+            // modos chegam via XHR após o Distrito; sem cobertura nenhuma a lista fica vazia
+            deliveryOptions.first().waitFor(new Locator.WaitForOptions()
+                    .setState(com.microsoft.playwright.options.WaitForSelectorState.ATTACHED)
+                    .setTimeout(20_000));
+        } catch (com.microsoft.playwright.TimeoutError e) {
+            return java.util.List.of();
+        }
+        page.waitForTimeout(1_500); // deixa a lista estabilizar (recalcula ao trocar de distrito)
+        return ((java.util.List<?>) deliveryOptions.evaluateAll("els => els.map(e => e.id)"))
+                .stream().map(String::valueOf).toList();
     }
 
     public BigDecimal deliveryModePrice(TestData.DeliveryMode mode) {

@@ -45,6 +45,7 @@ class GuestCheckoutTest extends BaseE2ETest {
         DeliveryMode mode = DeliveryMode.NORMAL;
 
         evidence.fact("SKU", sku);
+        evidence.fact("Browser", TestConfig.get("browser"));
         evidence.fact("E-mail (único)", email);
         evidence.fact("Cartão", card.brand() + " **** " + card.number().substring(card.number().length() - 4)
                 + " / titular " + card.cardholderName());
@@ -59,19 +60,23 @@ class GuestCheckoutTest extends BaseE2ETest {
         var uiTotal = new AtomicReference<BigDecimal>();
         var confirmation = new ConfirmationPage(page);
 
-        // ---- Passos 1-2 (roteiro do cliente): cookie de staging + addToCart via API ----
-        evidence.step("01 - Get Cookies Page (API)", () -> {
+        // ---- Pré-condição do staging: Get Cookies Page ----
+        evidence.step("00 - Get Cookies Page (acesso ao stg2)", () -> {
             cartApi.getStagingCookie();
             page.navigate(TestConfig.baseUrl() + "/getcookie.html"); // evidência visual do passo
         });
-        evidence.step("02 - Add SKU to cart (API addToCart)", () -> {
-            var r = cartApi.addToCart(sku, TestConfig.getInt("quantity"));
-            evidence.fact("addToCart", r.resultCode() + " " + r.resultMessage() + " | cartCount=" + r.cartCount());
+
+        // ---- Passos 1-2 (Execution Steps): PDP + "Add to Cart" pela UI ----
+        var product = new ProductPage(page, sku);
+        evidence.step("01 - Abrir página do produto (SKU " + sku + ")", () -> {
+            product.open();
+            evidence.fact("Produto", product.productName() + " | S/ " + product.price());
         });
+        evidence.step("02 - Clicar 'Agregar al carrito' e confirmar 'Producto agregado'", product::addToCart);
 
         // ---- Passo 3: carrinho ----
         evidence.step("03 - Abrir Cart e validar SKU listado", () ->
-                cart.open().assertSkuListed(sku));
+                product.goToCart().assertLoaded().assertSkuListed(sku));
 
         // ---- Passos 4-5: Continue -> página intermediária ----
         evidence.step("04 - Clicar Continuar", () -> guest.set(cart.clickContinue()));

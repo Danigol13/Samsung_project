@@ -55,18 +55,17 @@ public final class DataFactory {
     }
 
     /**
-     * ex.: qa.guest.261119105853.t26n1a3f9c2@gmail.com
-     * O validador do stg2 rejeita "+" e "-" no e-mail (campo fica inválido e o step não avança),
-     * por isso só letras, números e ponto. Timestamp + thread + sequencial (único na JVM)
-     * + 6 hex (unicidade entre máquinas/execuções simultâneas).
+     * ex.: qa.261119105853.12a3f9@gmail.com  (32 caracteres)
+     * Regras do validador do stg2 (observadas): rejeita "+" e "-" e e-mails longos (~40+ caracteres)
+     * -> só letras, números e ponto, curto. Timestamp + sequencial (único na JVM)
+     * + 4 hex (unicidade entre máquinas/execuções simultâneas).
      */
     public static String uniqueEmail() {
         String prefix = customer().emailPrefix();
         String ts = LocalDateTime.now().format(TS);
-        String rnd = UUID.randomUUID().toString().replace("-", "").substring(0, 6);
-        long thread = Thread.currentThread().threadId();
+        String rnd = UUID.randomUUID().toString().replace("-", "").substring(0, 4);
         long seq = SEQ.incrementAndGet();
         int at = prefix.indexOf('@');
-        return prefix.substring(0, at) + "." + ts + ".t" + thread + "n" + seq + rnd + prefix.substring(at);
+        return prefix.substring(0, at) + "." + ts + "." + seq + rnd + prefix.substring(at);
     }
 }
